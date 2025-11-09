@@ -578,13 +578,13 @@
 
         // Wall drawing
         function drawWallStart(point) {
-            tempElement = drawingGroup.line(point.x, point.y, point.x, point.y)
-                .stroke({ color: '#2c3e50', width: settings.wallThickness, linecap: 'round' });
+            tempElement = drawingGroup.group();
         }
 
         function drawWallUpdate(point) {
             if (tempElement) {
-                tempElement.plot(startPoint.x, startPoint.y, point.x, point.y);
+                tempElement.clear();
+                drawWall(tempElement, startPoint, point);
             }
         }
 
@@ -603,6 +603,27 @@
             }
         }
 
+        function drawWall(group, start, end) {
+            // Main wall line with square caps for better corner connections
+            const wallLine = group.line(start.x, start.y, end.x, end.y)
+                .stroke({
+                    color: '#2c3e50',
+                    width: settings.wallThickness,
+                    linecap: 'square',
+                    linejoin: 'miter'
+                });
+
+            // Add corner circles for clean intersections
+            const cornerRadius = settings.wallThickness / 2;
+            group.circle(cornerRadius * 2)
+                .fill('#2c3e50')
+                .center(start.x, start.y);
+
+            group.circle(cornerRadius * 2)
+                .fill('#2c3e50')
+                .center(end.x, end.y);
+        }
+
         // Door drawing
         function drawDoorStart(point) {
             tempElement = drawingGroup.group();
@@ -613,17 +634,10 @@
                 tempElement.clear();
                 const width = Math.abs(point.x - startPoint.x);
                 const height = Math.abs(point.y - startPoint.y);
-                const size = Math.min(width, height, 60);
+                const doorWidth = Math.max(width, height, 40);
+                const doorWidth2 = Math.min(doorWidth, 80);
 
-                // Door frame
-                tempElement.rect(size, 10)
-                    .fill('#8B4513')
-                    .move(startPoint.x, startPoint.y);
-
-                // Door arc
-                const arc = tempElement.path(`M ${startPoint.x} ${startPoint.y} Q ${startPoint.x + size} ${startPoint.y} ${startPoint.x + size} ${startPoint.y + size}`)
-                    .fill('none')
-                    .stroke({ color: '#8B4513', width: 2 });
+                drawDoor(tempElement, startPoint, doorWidth2);
             }
         }
 
@@ -632,6 +646,76 @@
                 elements.push({ type: 'door', element: tempElement });
                 tempElement = null;
             }
+        }
+
+        function drawDoor(group, pos, width) {
+            const frameThickness = 4;
+            const wallThickness = settings.wallThickness;
+
+            // Wall opening (lighter color to show opening)
+            group.rect(width, wallThickness)
+                .fill('#d5d5d5')
+                .move(pos.x, pos.y - wallThickness / 2);
+
+            // Door frame on both sides
+            group.rect(frameThickness, wallThickness + 4)
+                .fill('#5D4E37')
+                .move(pos.x, pos.y - wallThickness / 2 - 2);
+
+            group.rect(frameThickness, wallThickness + 4)
+                .fill('#5D4E37')
+                .move(pos.x + width - frameThickness, pos.y - wallThickness / 2 - 2);
+
+            // Door leaf (panel) - positioned at closed state
+            group.rect(width - frameThickness * 2, 3)
+                .fill('#8B4513')
+                .stroke({ color: '#5D4E37', width: 1 })
+                .move(pos.x + frameThickness, pos.y - 1.5);
+
+            // Door handle indicator
+            group.circle(3)
+                .fill('#FFD700')
+                .center(pos.x + width - frameThickness - 8, pos.y);
+
+            // Door swing arc (90 degrees)
+            const arcPath = describeArc(pos.x, pos.y, width - frameThickness * 2, 0, 90);
+            group.path(arcPath)
+                .fill('none')
+                .stroke({
+                    color: '#8B4513',
+                    width: 1.5,
+                    dasharray: '3,3',
+                    opacity: 0.6
+                });
+
+            // Swing direction indicator line
+            group.line(pos.x, pos.y, pos.x, pos.y - (width - frameThickness * 2))
+                .stroke({
+                    color: '#8B4513',
+                    width: 2,
+                    opacity: 0.7
+                });
+        }
+
+        // Helper function to create arc path
+        function describeArc(x, y, radius, startAngle, endAngle) {
+            const start = polarToCartesian(x, y, radius, endAngle);
+            const end = polarToCartesian(x, y, radius, startAngle);
+            const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+            return [
+                "M", x, y,
+                "L", start.x, start.y,
+                "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y,
+                "Z"
+            ].join(" ");
+        }
+
+        function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
+            const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+            return {
+                x: centerX + (radius * Math.cos(angleInRadians)),
+                y: centerY + (radius * Math.sin(angleInRadians))
+            };
         }
 
         // Window drawing
@@ -643,17 +727,10 @@
             if (tempElement) {
                 tempElement.clear();
                 const width = Math.abs(point.x - startPoint.x) || 60;
-                const height = 20;
+                const windowWidth = Math.max(width, 40);
+                const windowWidth2 = Math.min(windowWidth, 120);
 
-                // Window frame
-                tempElement.rect(width, height)
-                    .fill('#4A90E2')
-                    .stroke({ color: '#2c3e50', width: 2 })
-                    .move(startPoint.x, startPoint.y);
-
-                // Window divider
-                tempElement.line(startPoint.x + width/2, startPoint.y, startPoint.x + width/2, startPoint.y + height)
-                    .stroke({ color: '#2c3e50', width: 2 });
+                drawWindow(tempElement, startPoint, windowWidth2);
             }
         }
 
@@ -661,6 +738,74 @@
             if (tempElement) {
                 elements.push({ type: 'window', element: tempElement });
                 tempElement = null;
+            }
+        }
+
+        function drawWindow(group, pos, width) {
+            const wallThickness = settings.wallThickness;
+            const frameThickness = 3;
+            const glassThickness = wallThickness - frameThickness * 2;
+            const panes = Math.floor(width / 30);
+
+            // Wall opening (background)
+            group.rect(width, wallThickness)
+                .fill('#e0e0e0')
+                .move(pos.x, pos.y - wallThickness / 2);
+
+            // Outer frame (sill and header)
+            group.rect(width, frameThickness)
+                .fill('#5D4E37')
+                .move(pos.x, pos.y - wallThickness / 2);
+
+            group.rect(width, frameThickness)
+                .fill('#5D4E37')
+                .move(pos.x, pos.y + wallThickness / 2 - frameThickness);
+
+            // Side frames
+            group.rect(frameThickness, wallThickness)
+                .fill('#5D4E37')
+                .move(pos.x, pos.y - wallThickness / 2);
+
+            group.rect(frameThickness, wallThickness)
+                .fill('#5D4E37')
+                .move(pos.x + width - frameThickness, pos.y - wallThickness / 2);
+
+            // Glass area with gradient/transparency effect
+            const glassY = pos.y - glassThickness / 2;
+            const glassWidth = width - frameThickness * 2;
+
+            // Glass panes
+            for (let i = 0; i < panes; i++) {
+                const paneWidth = glassWidth / panes;
+                const paneX = pos.x + frameThickness + i * paneWidth;
+
+                // Glass with gradient
+                const glass = group.rect(paneWidth - 2, glassThickness)
+                    .fill('#B3D9FF')
+                    .stroke({ color: '#87CEEB', width: 0.5 })
+                    .move(paneX + 1, glassY)
+                    .opacity(0.6);
+
+                // Highlight effect (simulating reflection)
+                group.rect(paneWidth - 6, glassThickness / 3)
+                    .fill('#FFFFFF')
+                    .move(paneX + 3, glassY + 1)
+                    .opacity(0.4);
+            }
+
+            // Mullions (vertical dividers between panes)
+            for (let i = 1; i < panes; i++) {
+                const mullionX = pos.x + frameThickness + i * (glassWidth / panes);
+                group.rect(2, wallThickness)
+                    .fill('#5D4E37')
+                    .move(mullionX - 1, pos.y - wallThickness / 2);
+            }
+
+            // Horizontal mullion (middle bar)
+            if (wallThickness > 10) {
+                group.rect(glassWidth, 2)
+                    .fill('#5D4E37')
+                    .move(pos.x + frameThickness, pos.y - 1);
             }
         }
 
