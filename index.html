@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architectural Floor Plan Designer</title>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f0f0;
+            overflow: hidden;
+        }
+
+        #app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        #sidebar {
+            width: 280px;
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #3498db;
+        }
+
+        h2 {
+            font-size: 16px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: #ecf0f1;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+
+        .tool-group {
+            margin-bottom: 20px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 5px 0;
+            border: none;
+            border-radius: 5px;
+            background: #3498db;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        button.active {
+            background: #e74c3c;
+            box-shadow: 0 0 10px rgba(231, 76, 60, 0.5);
+        }
+
+        .input-group {
+            margin: 10px 0;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 13px;
+            color: #bdc3c7;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #34495e;
+            border-radius: 4px;
+            background: #34495e;
+            color: white;
+            font-size: 14px;
+        }
+
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            background: white;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            outline: none;
+        }
+
+        #info-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            font-size: 13px;
+            min-width: 200px;
+        }
+
+        #info-panel div {
+            margin: 5px 0;
+        }
+
+        .export-btn {
+            background: #27ae60 !important;
+        }
+
+        .export-btn:hover {
+            background: #229954 !important;
+        }
+
+        .clear-btn {
+            background: #e74c3c !important;
+        }
+
+        .clear-btn:hover {
+            background: #c0392b !important;
+        }
+
+        .color-picker {
+            width: 100%;
+            height: 35px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #instructions {
+            background: rgba(52, 152, 219, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <div id="sidebar">
+            <h1>🏗️ Floor Plan Designer</h1>
+
+            <div class="tool-group">
+                <h2>Drawing Tools</h2>
+                <button id="wallBtn">📐 Draw Wall</button>
+                <button id="doorBtn">🚪 Add Door</button>
+                <button id="windowBtn">🪟 Add Window</button>
+                <button id="roomBtn">🏠 Draw Room</button>
+            </div>
+
+            <div class="tool-group">
+                <h2>Settings</h2>
+                <div class="input-group">
+                    <label>Wall Thickness (cm):</label>
+                    <input type="number" id="wallThickness" value="20" min="10" max="50">
+                </div>
+                <div class="input-group">
+                    <label>Grid Size (cm):</label>
+                    <input type="number" id="gridSize" value="50" min="10" max="100">
+                </div>
+                <div class="input-group">
+                    <label>Wall Color:</label>
+                    <input type="color" id="wallColor" value="#2c3e50" class="color-picker">
+                </div>
+            </div>
+
+            <div class="tool-group">
+                <h2>View Options</h2>
+                <button id="toggleGridBtn">Toggle Grid</button>
+                <button id="toggleDimensionsBtn">Toggle Dimensions</button>
+                <button id="toggleHatchingBtn">Toggle Hatching</button>
+            </div>
+
+            <div class="tool-group">
+                <h2>Actions</h2>
+                <button id="undoBtn">↶ Undo</button>
+                <button id="clearBtn" class="clear-btn">🗑️ Clear All</button>
+                <button id="exportBtn" class="export-btn">📄 Export to PDF</button>
+            </div>
+
+            <div id="instructions">
+                <strong>Instructions:</strong><br>
+                • Select a tool and click on canvas<br>
+                • Walls: Click start, then end point<br>
+                • Doors/Windows: Click on walls<br>
+                • Rooms: Click to create points, double-click to finish
+            </div>
+        </div>
+
+        <div id="canvas-container">
+            <canvas id="renderCanvas"></canvas>
+            <div id="info-panel">
+                <div><strong>Tool:</strong> <span id="currentTool">None</span></div>
+                <div><strong>Objects:</strong> <span id="objectCount">0</span></div>
+                <div><strong>Cursor:</strong> <span id="cursorPos">0, 0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="floorplan.js"></script>
+</body>
+</html>
